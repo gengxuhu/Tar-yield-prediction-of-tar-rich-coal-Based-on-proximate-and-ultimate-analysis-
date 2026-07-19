@@ -1,0 +1,118 @@
+# 导入必要的库
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from xgboost import XGBRegressor  # 修改导入的模型类
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+import matplotlib.pyplot as plt
+from matplotlib import rcParams
+import numpy as np
+from scipy import stats
+import matplotlib
+import time  # 导入time模块
+
+matplotlib.use('TkAgg')
+
+# 记录程序开始时间
+start_time = time.time()
+
+# 训练计时开始
+train_start = time.time()
+
+
+config = {
+    "font.family": 'serif',
+    "font.size": 12,  # 相当于小四大小
+    "mathtext.fontset": 'stix',  # matplotlib渲染数学字体时使用的字体，和Times New Roman差别不大
+    "font.serif": ['STSong'],  # 宋体
+    'axes.unicode_minus': False  # 处理负号，即-号
+}
+rcParams.update(config)
+
+# 读取Excel数据
+
+
+excel_path = 'D:\研究生学习\博士学习\论文3\数据集\工业分析元素分析焦油产率数据归一化2.xlsx'  # 替换为实际文件路径
+train_data = pd.read_excel(excel_path, sheet_name='alltrain')
+test_data = pd.read_excel(excel_path, sheet_name='Ctest')
+
+# 提取特征和目标变量69
+X_train = train_data.loc[:, "A":"N"]  # 特征列从M到S
+y_train = train_data["Tar"]
+X_test = test_data.loc[:, "A":"N"]
+y_test = test_data["Tar"]
+# 建立XGBoost回归模型
+model = XGBRegressor(
+    n_estimators=150,      # 减少树的数量
+    learning_rate=0.1,   # 降低学习率
+    max_depth=3,          # 减小树的最大深度
+    subsample=0.7,        # 减少样本采样比例
+    colsample_bytree=0.8, # 减少特征采样比例
+    reg_alpha=0,        # 新增L1正则化
+    reg_lambda=2,         # 新增L2正则化
+    gamma= 0.4,
+    min_child_weight=7,   # 新增子节点最小权重
+    random_state=42
+)
+
+model.fit(X_train, y_train)
+train_end = time.time()
+print(f"\n模型训练耗时：{train_end - train_start:.4f} 秒")
+
+# 训练集预测计时开始
+predict_start = time.time()
+# 预测训练集
+x_pred = model.predict(X_train)
+predict_end = time.time()
+print(f"训练集预测耗时：{predict_end - predict_start:.4f} 秒")
+
+# 预测测试集
+y_pred = model.predict(X_test)
+end_time = time.time()
+
+# 计算并输出总运行时间
+elapsed_time = end_time - start_time
+print(f"\n代码运行时间：{elapsed_time:.4f} 秒")
+# 评估模型
+MSE = mean_squared_error(y_train, x_pred)
+RMSE = np.sqrt(MSE)
+MAE = mean_absolute_error(y_train, x_pred)
+R2 = r2_score(y_train, x_pred)
+train_mape = (abs((y_train - x_pred) / y_train)).mean() * 100
+
+test_mape = (abs((y_test - y_pred) / y_test)).mean() * 100
+mse = mean_squared_error(y_test, y_pred)
+rmse= np.sqrt(mse)
+mae = mean_absolute_error(y_test, y_pred)
+r2 = r2_score(y_test, y_pred)
+# 收集评估结果
+evaluation_data = {
+    '指标': ['训练集MSE', '训练集RMSE', '训练集MAE', '训练集R²', '训练集MAPE',
+            '测试集MSE', '测试集RMSE', '测试集MAE', '测试集R²', '测试集MAPE'],
+    '值': [MSE, RMSE, MAE, R2, train_mape,
+          mse, rmse, mae, r2, test_mape]
+}
+
+# 将评估结果转换为DataFrame
+evaluation_df = pd.DataFrame(evaluation_data)
+# 打印评估结果
+print(f'Mean Squared Error (MSE): {MSE:.4f}')
+print(f'Root Mean Squared Error (RMSE): {RMSE:.4f}')
+print(f'Mean Absolute Error (MAE): {MAE:.4f}')
+print(f'R² Score: {R2:.4f}')
+print(f'Mean Absolute Percentage Error (MAPE) for Training Data: {train_mape:.4f}%')
+print(f'Mean Absolute Percentage Error (MAPE) for Testing Data: {test_mape:.4f}%')
+print(f'Mean Squared Error (MSE): {mse:.4f}')
+print(f'Root Mean Squared Error (RMSE): {rmse:.4f}')
+print(f'Mean Absolute Error (MAE): {mae:.4f}')
+print(f'R² Score: {r2:.4f}')
+
+
+# 创建包含真实Y值和预测Y值的DataFrame
+train_results = pd.DataFrame({'真实Y值':y_train.values , '预测Y值': x_pred})
+test_results = pd.DataFrame({'真实Y值': y_test.values, '预测Y值': y_pred})
+
+# 将DataFrame写入Excel文件
+with pd.ExcelWriter('D:\研究生学习\博士学习\论文3\数据集\模型参数\XGBoostall.xlsx') as writer:
+    train_results.to_excel(writer, sheet_name='train', index=False)
+    test_results.to_excel(writer, sheet_name='test', index=False)
+    evaluation_df.to_excel(writer, sheet_name='评估结果', index=False)
